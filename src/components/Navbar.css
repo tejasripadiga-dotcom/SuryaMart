@@ -1,0 +1,80 @@
+.navbar {
+  min-height: 76px;
+  padding: 16px 7%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  background: #ffffff;
+  box-shadow: 0 3px 18px rgba(20, 30, 60, 0.06);
+}
+
+.navbar-logo {
+  color: #172033;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  text-decoration: none;
+}
+
+.navbar-logo span {
+  color: #6654e8;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.navbar-links a {
+  color: #535c70;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.navbar-links a:hover,
+.navbar-links a.active {
+  color: #6654e8;
+}
+
+.navbar-cart {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #6654e8;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .navbar {
+    padding: 16px 4%;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .navbar-logo {
+    font-size: 21px;
+  }
+
+  .navbar-links {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    gap: 22px;
+  }
+
+  .navbar-links a {
+    font-size: 13px;
+  }
+
+  .navbar-cart {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+}

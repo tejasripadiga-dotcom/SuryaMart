@@ -1,0 +1,127 @@
+.cart-page {
+  min-height: 75vh;
+  padding: 50px 7% 80px;
+}
+
+.cart-heading {
+  margin-bottom: 35px;
+}
+
+.cart-label {
+  margin-bottom: 12px;
+  color: #6654e8;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.cart-heading h1 {
+  margin-bottom: 12px;
+  color: #172033;
+  font-size: clamp(32px, 4vw, 42px);
+}
+
+.cart-heading > p:last-child {
+  color: #687086;
+  line-height: 1.7;
+}
+
+.cart-empty {
+  max-width: 650px;
+  margin: 0 auto;
+  padding: 55px 25px;
+  border: 1px solid #eceef5;
+  border-radius: 22px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.cart-empty-icon {
+  margin-bottom: 18px;
+  font-size: 64px;
+}
+
+.cart-empty h2 {
+  margin-bottom: 12px;
+  color: #172033;
+  font-size: 25px;
+}
+
+.cart-empty > p {
+  max-width: 430px;
+  margin: 0 auto 25px;
+  color: #687086;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.cart-shop-button {
+  display: inline-block;
+  padding: 14px 22px;
+  border-radius: 10px;
+  background: #6654e8;
+  color: #ffffff;
+  font-weight: 700;
+  text-decoration: none;
+  transition: 0.2s;
+}
+
+.cart-shop-button:hover {
+  background: #5945df;
+  transform: translateY(-2px);
+}
+
+@media (max-width: 600px) {
+  .cart-page {
+    padding: 35px 4% 55px;
+  }
+
+  .cart-empty {
+    padding: 40px 20px;
+  }
+}
+.cart-remove-button{
+    margin-top:12px;
+    padding:8px 16px;
+    background-color:#fff0f0;
+    color:#dc2626;
+    border:1px solide #fecaca;
+    border-radius:6px;
+    font-size:14px;
+    cursor:pointer;
+    transition:0.3s ease;
+}
+.cart-remove-button:hover{
+    background-color:#dc2626;
+    color:white;
+}
+.cart-quantity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.cart-quantity button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: #ffffff;
+  color: #111827;
+  font-size: 20px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.cart-quantity button:hover {
+  background-color: #111827;
+  color: #ffffff;
+}
+
+.cart-quantity span {
+  min-width: 20px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+}
