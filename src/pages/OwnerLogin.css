@@ -1,0 +1,57 @@
+.owner-login {
+  max-width: 400px;
+  margin: 60px auto;
+  padding: 30px;
+  background-color: #ffffff;
+  border: 1px solid #dddddd;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  font-family: Arial, sans-serif;
+}
+
+.owner-login h1 {
+  text-align: center;
+  color: #1f2937;
+  margin-bottom: 25px;
+  font-size: 25px;
+}
+
+.owner-login form > div {
+  margin-bottom: 18px;
+}
+
+.owner-login label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+  color: #374151;
+}
+
+.owner-login input {
+  width: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+  font-size: 15px;
+}
+
+.owner-login input:focus {
+  outline: 2px solid #2563eb;
+  border-color: #2563eb;
+}
+
+.owner-login button {
+  width: 100%;
+  padding: 12px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.owner-login button:hover {
+  background-color: #1d4ed8;
+}

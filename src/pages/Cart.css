@@ -125,3 +125,20 @@
   font-size: 16px;
   font-weight: 600;
 }
+.checkout-button {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 20px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.checkout-button:hover {
+  background-color: #1d4ed8;
+}

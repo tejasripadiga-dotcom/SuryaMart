@@ -1,6 +1,8 @@
 import "./Cart.css";
+import {useNavigate} from "react-router-dom";
 
 function Cart({ cart, onRemoveFromCart, onQuantityChange }) {
+  const navigate=useNavigate();
   const totalPrice = cart.reduce(
     (total, product) =>
       total + product.price * product.quantity,
@@ -73,9 +75,24 @@ function Cart({ cart, onRemoveFromCart, onQuantityChange }) {
             </article>
           ))}
 
-          <div className="cart-total">
+         <div className="cart-total">
             <h2>Total: ₹{totalPrice}</h2>
-            <p>{cart.reduce((total, item) => total + item.quantity, 0)} item(s) in your cart</p>
+
+            <p>
+              {cart.reduce(
+                (total, item) => total + item.quantity,
+                0
+              )}{" "}
+              item(s) in your cart
+            </p>
+
+            <button
+              type="button"
+              className="checkout-button"
+              onClick={() => navigate("/checkout")}
+            >
+              Proceed to Checkout →
+            </button>
           </div>
         </section>
       )}

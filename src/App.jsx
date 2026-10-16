@@ -1,8 +1,10 @@
 import { useState } from "react";
+
 import {
   BrowserRouter,
   Routes,
   Route,
+  Navigate,
 } from "react-router-dom";
 
 import Navbar from "./components/Navbar.jsx";
@@ -13,10 +15,22 @@ import Products from "./pages/Products.jsx";
 import About from "./pages/About.jsx";
 import Cart from "./pages/Cart.jsx";
 
+import AdminDashboard from "./pages/AdminDashboard.jsx";
+import OwnerLogin from "./pages/OwnerLogin.jsx";
+import AddProduct from "./pages/AddProduct.jsx";
+import ProductDetails from "./pages/ProductDetails.jsx";
+import Checkout from "./pages/Checkout.jsx";
+import OwnerOrders from "./pages/OwnerOrders.jsx";
+
 import "./App.css";
 
 function App() {
   const [cart, setCart] = useState([]);
+
+  // Check Owner Login
+  const isOwnerLoggedIn = Boolean(
+    sessionStorage.getItem("ownerToken")
+  );
 
   // Add product to cart
   function handleAddToCart(product) {
@@ -38,7 +52,10 @@ function App() {
 
       return [
         ...previousCart,
-        { ...product, quantity: 1 },
+        {
+          ...product,
+          quantity: 1,
+        },
       ];
     });
   }
@@ -71,17 +88,21 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Navbar cartCount={cart.reduce(
-        (total, item) => total + item.quantity,
-        0
-      )} />
+      <Navbar
+        cartCount={cart.reduce(
+          (total, item) => total + item.quantity,
+          0
+        )}
+      />
 
       <Routes>
+        {/* Home Page */}
         <Route
           path="/"
           element={<Home />}
         />
 
+        {/* Products Page */}
         <Route
           path="/products"
           element={
@@ -91,11 +112,13 @@ function App() {
           }
         />
 
+        {/* About Page */}
         <Route
           path="/about"
           element={<About />}
         />
 
+        {/* Cart Page */}
         <Route
           path="/cart"
           element={
@@ -105,6 +128,66 @@ function App() {
               onQuantityChange={handleQuantityChange}
             />
           }
+        />
+
+        {/* Owner Login Page */}
+        <Route
+          path="/owner-login"
+          element={<OwnerLogin />}
+        />
+
+        {/* Protected Admin Dashboard */}
+        <Route
+          path="/admin"
+          element={
+            isOwnerLoggedIn ? (
+              <AdminDashboard />
+            ) : (
+              <Navigate
+                to="/owner-login"
+                replace
+              />
+            )
+          }
+        />
+      {/* Add Product Page */}
+        <Route
+          path="/admin/add-product"
+          element={
+            isOwnerLoggedIn ? (
+              <AddProduct />
+            ) : (
+              <Navigate to="/owner-login" replace />
+            )
+          }
+        />
+
+        {/* Product Details Page */}
+        <Route
+          path="/products/:id"
+          element={
+            <ProductDetails
+              onAddToCart={handleAddToCart}
+            />
+          }
+        />
+        <Route
+        path="/checkout"
+         element={
+         <Checkout
+          cart={cart}
+              />
+              }/>
+
+              <Route
+        path="/owner-orders"
+        element={<OwnerOrders />}
+        />
+
+        {/* Unknown Page */}
+        <Route
+          path="*"
+          element={<Navigate to="/" replace />}
         />
       </Routes>
 
