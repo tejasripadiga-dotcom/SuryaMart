@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./AdminDashboard.css";
+import API_BASE_URL from "../api";
 
 function AdminDashboard() {
   const [products, setProducts] = useState([]);
@@ -26,7 +27,7 @@ function AdminDashboard() {
       setError("");
 
       const response = await fetch(
-        "http://localhost:5000/api/products"
+        `${API_BASE_URL}/api/products`
       );
 
       if (!response.ok) {
@@ -113,7 +114,7 @@ function AdminDashboard() {
       setMessage("");
 
       const response = await fetch(
-        `http://localhost:5000/api/products/${editingId}`,
+        `${API_BASE_URL}/api/products/${editingId}`,
         {
           method: "PUT",
           headers: {
@@ -183,7 +184,7 @@ function AdminDashboard() {
       setError("");
 
       const response = await fetch(
-        `http://localhost:5000/api/products/${product.id}`,
+        `${API_BASE_URL}/api/products/${product.id}`,
         {
           method: "DELETE",
           headers: {

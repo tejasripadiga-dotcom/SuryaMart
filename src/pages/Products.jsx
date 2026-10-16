@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Products.css";
 import ProductCard from "../components/ProductCard.jsx";
+import API_BASE_URL from "../api";
 
 function Products({ onAddToCart }) {
   const [products, setProducts] = useState([]);
@@ -11,7 +12,7 @@ function Products({ onAddToCart }) {
   const [error, setError] = useState("");
 
   const navigate = useNavigate();
-
+  
   useEffect(() => {
     async function fetchProducts() {
       try {
@@ -19,7 +20,7 @@ function Products({ onAddToCart }) {
         setError("");
 
         const response = await fetch(
-          "http://localhost:5000/api/products"
+          `${API_BASE_URL}/api/products`
         );
 
         if (!response.ok) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./OwnerLogin.css";
+import API_BASE_URL from "../api";
 
 function OwnerLogin() {
   const [username, setUsername] = useState("");
@@ -18,7 +19,7 @@ function OwnerLogin() {
 
     try {
       const response = await fetch(
-        "http://localhost:5000/api/owner-login",
+        `${API_BASE_URL}/api/owner-login`,
         {
           method: "POST",
           headers: {

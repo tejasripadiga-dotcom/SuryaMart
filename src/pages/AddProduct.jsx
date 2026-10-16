@@ -1,4 +1,5 @@
 import { useState } from "react";
+import API_BASE_URL from "../api";
 
 function AddProduct() {
   const [name, setName] = useState("");
@@ -65,7 +66,7 @@ function AddProduct() {
     formData.append("image", imageFile);
 
     const response = await fetch(
-      "http://localhost:5000/api/products/upload",
+      `${API_BASE_URL}/api/products/upload`,
       {
         method: "POST",
         headers: {

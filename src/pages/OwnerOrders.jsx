@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import API_BASE_URL from "../api";
 
 function OwnerOrders() {
   const [orders, setOrders] = useState([]);
@@ -19,7 +20,7 @@ async function updateOrderStatus(orderId, newStatus) {
     setUpdatingOrderId(orderId);
 
     const response = await fetch(
-      `http://localhost:5000/api/orders/${orderId}/status`,
+      `${API_BASE_URL}/api/orders/${orderId}/status`,
       {
         method: "PUT",
         headers: {
@@ -66,7 +67,7 @@ async function updateOrderStatus(orderId, newStatus) {
         }
 
         const response = await fetch(
-          "http://localhost:5000/api/orders",
+          `${API_BASE_URL}/api/orders`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
