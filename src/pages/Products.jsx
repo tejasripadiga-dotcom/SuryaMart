@@ -28,6 +28,7 @@ function Products({ onAddToCart }) {
         }
 
         const data = await response.json();
+        console.log("Products API Response:",data)
 
         if (
           !data.success ||

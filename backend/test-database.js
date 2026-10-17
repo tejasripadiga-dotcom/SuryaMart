@@ -1,11 +1,23 @@
-const db = require("./database");
+const { pool, initializeDatabase } = require("./database");
 
-const result = db.prepare("SELECT 1 AS test").get();
+async function testDatabase() {
+  try {
+    // Initialize database tables
+    await initializeDatabase();
 
-console.log("Database Test Result:", result);
+    // Test PostgreSQL connection
+    const result = await pool.query("SELECT 1 AS test");
 
-if (result.test === 1) {
-  console.log("Database Test Successful!");
+    console.log("Database Test Result:", result.rows[0]);
+
+    if (Number(result.rows[0].test) === 1) {
+      console.log("PostgreSQL Database Test Successful!");
+    }
+  } catch (error) {
+    console.error("Database Test Failed:", error);
+  } finally {
+    await pool.end();
+  }
 }
 
-db.close();
+testDatabase();

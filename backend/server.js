@@ -21,8 +21,8 @@ const upload=multer({
   }
 });
 
-const db = require("./database");
 
+const { pool, initializeDatabase } = require("./database");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -138,9 +138,10 @@ app.get("/api/owner-dashboard", verifyOwnerToken, (req, res) => {
   });
 });
 
-// CREATE CUSTOMER ORDER API
 // CREATE CUSTOMER ORDER API - DUPLICATE ORDER PREVENTION
-app.post("/api/orders", (req, res) => {
+app.post("/api/orders", async (req, res) => {
+  let client;
+
   try {
     const { requestId, customer, items } = req.body;
 
@@ -152,25 +153,6 @@ app.post("/api/orders", (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid order request ID. Please try again.",
-      });
-    }
-
-    // Check whether this order was already placed
-    const existingOrder = db
-      .prepare(`
-        SELECT id, total_amount
-        FROM orders
-        WHERE request_id = ?
-      `)
-      .get(requestId);
-
-    if (existingOrder) {
-      return res.status(200).json({
-        success: true,
-        duplicate: true,
-        message: "This order has already been placed.",
-        orderId: Number(existingOrder.id),
-        totalAmount: Number(existingOrder.total_amount),
       });
     }
 
@@ -235,6 +217,7 @@ app.post("/api/orders", (req, res) => {
     const validatedItems = [];
     let totalAmount = 0;
 
+    // Verify products using PostgreSQL
     for (const item of items) {
       const productId = Number(item.productId);
       const quantity = Number(item.quantity);
@@ -262,13 +245,14 @@ app.post("/api/orders", (req, res) => {
         });
       }
 
-      const product = db
-        .prepare(`
-          SELECT id, name, brand, price
-          FROM products
-          WHERE id = ?
-        `)
-        .get(productId);
+      const productResult = await pool.query(
+        `SELECT id, name, brand, price
+         FROM products
+         WHERE id = $1`,
+        [productId]
+      );
+
+      const product = productResult.rows[0];
 
       if (!product) {
         return res.status(400).json({
@@ -286,8 +270,7 @@ app.post("/api/orders", (req, res) => {
         });
       }
 
-      const subtotal = price * quantity;
-      totalAmount += subtotal;
+      totalAmount += price * quantity;
 
       validatedItems.push({
         productId: product.id,
@@ -299,41 +282,47 @@ app.post("/api/orders", (req, res) => {
         color: item.color,
       });
     }
-    // Save order and items in one database transaction
-    const createOrder = db.transaction(() => {
-      const orderResult = db
-        .prepare(`
-          INSERT INTO orders (
-            request_id,
-            customer_name,
-            mobile,
-            email,
-            house_number,
-            street,
-            city,
-            state,
-            pincode,
-            total_amount
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `)
-        .run(
-          requestId,
-          customer.name.trim(),
-          customer.mobile.trim(),
-          customer.email.trim(),
-          customer.houseNumber.trim(),
-          customer.street.trim(),
-          customer.city.trim(),
-          customer.state.trim(),
-          customer.pincode.trim(),
-          totalAmount
-        );
+    // Start PostgreSQL transaction
+    client = await pool.connect();
 
-      const orderId = Number(orderResult.lastInsertRowid);
+    await client.query("BEGIN");
 
-      const insertItem = db.prepare(`
-        INSERT INTO order_items (
+    // Insert order
+    const orderResult = await client.query(
+      `INSERT INTO orders (
+        request_id,
+        customer_name,
+        mobile,
+        email,
+        house_number,
+        street,
+        city,
+        state,
+        pincode,
+        total_amount
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id`,
+      [
+        requestId,
+        customer.name.trim(),
+        customer.mobile.trim(),
+        customer.email.trim(),
+        customer.houseNumber.trim(),
+        customer.street.trim(),
+        customer.city.trim(),
+        customer.state.trim(),
+        customer.pincode.trim(),
+        totalAmount,
+      ]
+    );
+
+    const orderId = Number(orderResult.rows[0].id);
+
+    // Insert order items
+    for (const item of validatedItems) {
+      await client.query(
+        `INSERT INTO order_items (
           order_id,
           product_id,
           product_name,
@@ -343,11 +332,8 @@ app.post("/api/orders", (req, res) => {
           color,
           quantity
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      for (const item of validatedItems) {
-        insertItem.run(
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
           orderId,
           item.productId,
           item.name,
@@ -355,14 +341,13 @@ app.post("/api/orders", (req, res) => {
           item.price,
           item.size,
           item.color,
-          item.quantity
-        );
-      }
+          item.quantity,
+        ]
+      );
+    }
 
-      return orderId;
-    });
-
-    const orderId = createOrder();
+    // Save everything together
+    await client.query("COMMIT");
 
     return res.status(201).json({
       success: true,
@@ -372,26 +357,34 @@ app.post("/api/orders", (req, res) => {
       totalAmount,
     });
   } catch (error) {
-    // Handle duplicate requests arriving at the same time
-    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+    // Undo incomplete transaction
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Order rollback error:", rollbackError);
+      }
+    }
+
+    // Handle duplicate order requests
+    if (error.code === "23505") {
       try {
         const { requestId } = req.body;
 
-        const existingOrder = db
-          .prepare(`
-            SELECT id, total_amount
-            FROM orders
-            WHERE request_id = ?
-          `)
-          .get(requestId);
+        const existingOrder = await pool.query(
+          `SELECT id, total_amount
+           FROM orders
+           WHERE request_id = $1`,
+          [requestId]
+        );
 
-        if (existingOrder) {
+        if (existingOrder.rows.length > 0) {
           return res.status(200).json({
             success: true,
             duplicate: true,
             message: "This order has already been placed.",
-            orderId: Number(existingOrder.id),
-            totalAmount: Number(existingOrder.total_amount),
+            orderId: Number(existingOrder.rows[0].id),
+            totalAmount: Number(existingOrder.rows[0].total_amount),
           });
         }
       } catch (lookupError) {
@@ -405,19 +398,24 @@ app.post("/api/orders", (req, res) => {
       success: false,
       message: "Unable to place order.",
     });
+  } finally {
+    // Release database connection
+    if (client) {
+      client.release();
+    }
   }
 });
 
 // GET Products API - Anyone can view products
-app.get("/api/products", (req, res) => {
+app.get("/api/products", async (req, res) => {
   try {
-    const products = db
-      .prepare(`
-        SELECT id, name, price, brand,image_url, created_at
-        FROM products
-        ORDER BY id DESC
-      `)
-      .all();
+    const result = await pool.query(`
+      SELECT id, name, price, brand, image_url, created_at
+      FROM products
+      ORDER BY id DESC
+    `);
+
+    const products = result.rows;
 
     return res.json({
       success: true,
@@ -433,7 +431,6 @@ app.get("/api/products", (req, res) => {
     });
   }
 });
-
 // Upload Product Image API
 app.post(
   "/api/products/upload",
@@ -459,9 +456,13 @@ app.post(
         });
       }
 
+      // Upload image to Cloudinary
       const imageUrl = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
-          { folder: "surya-mart/products", resource_type: "image" },
+          {
+            folder: "surya-mart/products",
+            resource_type: "image",
+          },
           (error, result) => {
             if (error) {
               reject(error);
@@ -474,23 +475,23 @@ app.post(
         stream.end(req.file.buffer);
       });
 
-      const result = db
-        .prepare(
-          `INSERT INTO products (name, price, brand, image_url)
-           VALUES (?, ?, ?, ?)`
-        )
-        .run(name.trim(), numericPrice, brand.trim(), imageUrl);
+      // Save product details in PostgreSQL
+      const result = await pool.query(
+        `INSERT INTO products (name, price, brand, image_url)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, name, price, brand, image_url, created_at`,
+        [
+          name.trim(),
+          numericPrice,
+          brand.trim(),
+          imageUrl,
+        ]
+      );
 
       return res.status(201).json({
         success: true,
         message: "Product and image uploaded successfully!",
-        product: {
-          id: result.lastInsertRowid,
-          name: name.trim(),
-          price: numericPrice,
-          brand: brand.trim(),
-          image_url: imageUrl,
-        },
+        product: result.rows[0],
       });
     } catch (error) {
       console.error("Product image upload error:", error);
@@ -504,7 +505,7 @@ app.post(
 );
 
 // POST Product API - Owner only
-app.post("/api/products", verifyOwnerToken, (req, res) => {
+app.post("/api/products", verifyOwnerToken, async (req, res) => {
   try {
     const { name, price, brand } = req.body;
 
@@ -525,36 +526,30 @@ app.post("/api/products", verifyOwnerToken, (req, res) => {
       });
     }
 
-    const result = db
-      .prepare(`
-        INSERT INTO products (name, price, brand)
-        VALUES (?, ?, ?)
-      `)
-      .run(name.trim(), Number(price),brand.trim());
+    const result = await pool.query(
+      `INSERT INTO products (name, price, brand)
+       VALUES ($1, $2, $3)
+       RETURNING id, name, price, brand, image_url, created_at`,
+      [name.trim(), Number(price), brand.trim()]
+    );
 
-      const newProduct={
-        id:Number(result.lastInsertRowid),
-        name:name.trim(),
-        price:Number(price),
-        brand:brand.trim(),
-      };
-      return res.status(201).json({
-        success:true,
-        message:"Product added successfully!",
-        product:newProduct,
-      });
-    }catch(error){
-        console.error("Add product error:",error);
+    return res.status(201).json({
+      success: true,
+      message: "Product added successfully!",
+      product: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Add product error:", error);
 
-        return res.status(500).json({
-            success:false,
-            message:"Failed to add product:",
-        });
-    }
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add product.",
+    });
+  }
 });
 
 // DELETE Product API - Owner only
-app.delete("/api/products/:id", verifyOwnerToken, (req, res) => {
+app.delete("/api/products/:id", verifyOwnerToken, async (req, res) => {
   try {
     const productId = Number(req.params.id);
 
@@ -566,13 +561,14 @@ app.delete("/api/products/:id", verifyOwnerToken, (req, res) => {
       });
     }
 
-    // Delete Product from SQLite Database
-    const result = db
-      .prepare("DELETE FROM products WHERE id = ?")
-      .run(productId);
+    // Delete Product from PostgreSQL
+    const result = await pool.query(
+      "DELETE FROM products WHERE id = $1 RETURNING id",
+      [productId]
+    );
 
     // Check whether product existed
-    if (result.changes === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
         message: "Product not found.",
@@ -595,7 +591,7 @@ app.delete("/api/products/:id", verifyOwnerToken, (req, res) => {
 });
 
 // UPDATE Product API - Owner only
-app.put("/api/products/:id", verifyOwnerToken, (req, res) => {
+app.put("/api/products/:id", verifyOwnerToken, async (req, res) => {
   try {
     const productId = Number(req.params.id);
     const { name, price, brand } = req.body;
@@ -626,42 +622,27 @@ app.put("/api/products/:id", verifyOwnerToken, (req, res) => {
       });
     }
 
-    // Update Product in SQLite Database
-    const result = db
-      .prepare(`
-        UPDATE products
-        SET name = ?, price = ?, brand = ?
-        WHERE id = ?
-      `)
-      .run(name.trim(), Number(price), brand.trim(), productId);
+    // Update Product in PostgreSQL
+    const result = await pool.query(
+      `UPDATE products
+       SET name = $1, price = $2, brand = $3
+       WHERE id = $4
+       RETURNING id, name, price, brand, image_url, created_at`,
+      [name.trim(), Number(price), brand.trim(), productId]
+    );
 
     // Check whether product exists
-    if (result.changes === 0) {
-      const existingProduct = db
-        .prepare("SELECT id FROM products WHERE id = ?")
-        .get(productId);
-
-      if (!existingProduct) {
-        return res.status(404).json({
-          success: false,
-          message: "Product not found.",
-        });
-      }
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found.",
+      });
     }
-
-    // Get Updated Product
-    const updatedProduct = db
-      .prepare(`
-        SELECT id, name, price, brand, created_at
-        FROM products
-        WHERE id = ?
-      `)
-      .get(productId);
 
     return res.json({
       success: true,
       message: "Product updated successfully!",
-      product: updatedProduct,
+      product: result.rows[0],
     });
   } catch (error) {
     console.error("Update product error:", error);
@@ -674,19 +655,22 @@ app.put("/api/products/:id", verifyOwnerToken, (req, res) => {
 });
 
 // OWNER - GET ALL CUSTOMER ORDERS API
-app.get("/api/orders", verifyOwnerToken, (req, res) => {
+app.get("/api/orders", verifyOwnerToken, async (req, res) => {
   try {
-    const orders = db
-      .prepare(`
-        SELECT *
-        FROM orders
-        ORDER BY created_at DESC
-      `)
-      .all();
+    // Get all customer orders from PostgreSQL
+    const ordersResult = await pool.query(`
+      SELECT *
+      FROM orders
+      ORDER BY created_at DESC
+    `);
 
-    const getOrderItems = db.prepare(`
+    const orders = ordersResult.rows;
+
+    // Get all order items from PostgreSQL
+    const itemsResult = await pool.query(`
       SELECT
         id,
+        order_id,
         product_id,
         product_name,
         brand,
@@ -695,12 +679,16 @@ app.get("/api/orders", verifyOwnerToken, (req, res) => {
         color,
         quantity
       FROM order_items
-      WHERE order_id = ?
+      ORDER BY id ASC
     `);
 
+    const allItems = itemsResult.rows;
+    // Attach items to their corresponding orders
     const ordersWithItems = orders.map((order) => ({
       ...order,
-      items: getOrderItems.all(order.id),
+      items: allItems.filter(
+        (item) => Number(item.order_id) === Number(order.id)
+      ),
     }));
 
     return res.status(200).json({
@@ -719,68 +707,87 @@ app.get("/api/orders", verifyOwnerToken, (req, res) => {
 });
 
 // OWNER - UPDATE ORDER STATUS API
-app.put("/api/orders/:id/status", verifyOwnerToken, (req, res) => {
+app.put(
+  "/api/orders/:id/status",
+  verifyOwnerToken,
+  async (req, res) => {
+    try {
+      const orderId = Number(req.params.id);
+      const { status } = req.body;
+
+      // Validate Order ID
+      if (!Number.isInteger(orderId) || orderId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid order ID.",
+        });
+      }
+
+      // Allow only these statuses
+      const allowedStatuses = [
+        "Pending",
+        "Confirmed",
+        "Shipped",
+        "Delivered",
+      ];
+
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid order status.",
+        });
+      }
+
+      // Check whether order exists in PostgreSQL
+      const existingOrder = await pool.query(
+        "SELECT id FROM orders WHERE id = $1",
+        [orderId]
+      );
+
+      if (existingOrder.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found.",
+        });
+      }
+      // Update order status in PostgreSQL
+      await pool.query(
+        "UPDATE orders SET status = $1 WHERE id = $2",
+        [status, orderId]
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Order status updated successfully!",
+        orderId,
+        status,
+      });
+    } catch (error) {
+      console.error("Update order status error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Unable to update order status.",
+      });
+    }
+  }
+);
+// START SERVER AFTER DATABASE INITIALIZATION
+async function startServer() {
   try {
-    const orderId = Number(req.params.id);
-    const { status } = req.body;
+    // Initialize PostgreSQL database and create tables
+    await initializeDatabase();
 
-    // Validate Order ID
-    if (!Number.isInteger(orderId) || orderId <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid order ID.",
-      });
-    }
-
-    // Allow only these statuses
-    const allowedStatuses = [
-      "Pending",
-      "Confirmed",
-      "Shipped",
-      "Delivered",
-    ];
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid order status.",
-      });
-    }
-
-    // Check whether order exists
-    const existingOrder = db
-      .prepare("SELECT id FROM orders WHERE id = ?")
-      .get(orderId);
-
-    if (!existingOrder) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found.",
-      });
-    }
-
-    // Update status
-    db.prepare(
-      "UPDATE orders SET status = ? WHERE id = ?"
-    ).run(status, orderId);
-
-    return res.status(200).json({
-      success: true,
-      message: "Order status updated successfully!",
-      orderId,
-      status,
+    // Start backend server
+    app.listen(PORT, () => {
+      console.log(
+        `SuryaMart Backend running at http://localhost:${PORT}`
+      );
     });
   } catch (error) {
-    console.error("Update order status error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Unable to update order status.",
-    });
+    console.error("Failed to start server:", error);
+    process.exit(1);
   }
-});
+}
 
-app.listen(PORT,()=>{
-    console.log(`SuryaMart Backend running at
-        http://localhost:${PORT}`);
-});
+startServer();
